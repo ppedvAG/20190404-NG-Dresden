@@ -1,0 +1,747 @@
+Diese App soll möglichst nah dem offiziellen Beispiel von Angular sein (heroes).
+
+1.
+C:\Users\vn3>ng new todo-app5
+
+2.
+C:\Users\vn3\todo-app5>npm install angular-in-memory-web-api --save
+
+3.
+app.module.ts
+import { HttpClientModule } from '@angular/common/http';
+import { HttpClientInMemoryWebApiModule } from 'angular-in-memory-web-api';
+import { InMemoryDataService }  from './in-memory-data.service';
+/** geht auch mit 'angular-in-memory-web-api' */
+...
+ imports: [
+    ...,
+    HttpClientModule,
+    HttpClientInMemoryWebApiModule.forRoot(
+      InMemoryDataService, {dataEncapsulation: false}
+    )
+  ]
+/* forRoot() - Redirect the Angular HttpClient XHR calls to in-memory data store that implements InMemoryDbService. with class that implements InMemoryDbService and creates an in-memory database.
+
+Usually imported in the root application module. Can import in a lazy feature module too, which will shadow modules loaded earlier
+@param dbCreator — Class that creates seed data for in-memory database. Must implement InMemoryDbService.
+
+@param options
+
+@example
+
+HttpInMemoryWebApiModule.forRoot(dbCreator);
+HttpInMemoryWebApiModule.forRoot(dbCreator, {useValue: {delay:600}});
+ */
+/** was ist data encapsulation */
+4.
+C:\Users\vn3\todo-app5\src\app>ng generate service InMemoryData
+
+5.
+todo.ts
+export class Todo {
+    id: number;
+    title: string;
+}
+ 
+
+6. 
+in-memory-data.service.ts
+import { InMemoryDbService } from 'angular-in-memory-web-api';
+import { Todo } from './todo';
+import { Injectable } from '@angular/core';
+
+@Injectable({
+  providedIn: 'root',
+})
+export class InMemoryDataService extends InMemoryDbService {
+  createDb() {
+    const todos = [
+      { id: 1, title: 'zur Post' },
+      { id: 2, title: 'einkaufen' },
+      { id: 3, title: 'Friseur' },
+      { id: 4, title: 'Zahnarzt' },
+      { id: 5, title: 'putzen' },
+      { id: 6, title: 'Mama anrufen' },
+      { id: 7, title: 'Geschenke kaufen' },
+      { id: 8, title: 'Sport' },
+      { id: 9, title: 'Fahrrad reparieren' }
+    ];
+    return {todos};
+  }
+
+  // Overrides the genId method to ensure that a todo always has an id.
+  // If the todos array is empty,
+  // the method below returns the initial number (1).
+  // if the todos array is not empty, the method below returns the highest
+  // todo id + 1.
+  genId(todos: Todo[]): number {
+    return todos.length > 0 ? Math.max(...todos.map(todo => todo.id)) + 1 : 1;
+  }
+}
+/** Soll der constructor raus? */
+/** ... Spread-Operator */
+
+6.
+
+
+
+7.
+
+C:\Users\vn3\todo-app5\src\app>ng generate service message
+
+
+message.service.ts
+import { Injectable } from '@angular/core';
+@Injectable({
+  providedIn: 'root'
+})
+export class MessageService {
+  messages: string[] = [];
+  add(message: string) {
+    this.messages.push(message);
+  }
+  clear() {
+    this.messages = [];
+  }
+}
+
+8.
+C:\Users\vn3\todo-app5\src\app>ng generate service todo
+
+9.
+
+/** aufpassen, dass http nicht von selenium, sondern von angular geholt wird*/
+todo.service.ts
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { Todo } from './todo';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class TodoService {
+
+  /* Define the todosUrl of the form :base/:collectionName 
+  with the address of the heroes resource on the server. 
+  Here base is the resource to which requests are made, 
+  and collectionName is the heroes data object in the in-memory-data-service.ts */
+
+
+  private todosUrl = 'api/todos';  // URL to web api
+
+  constructor(
+    private http: HttpClient,
+    private messageService: MessageService) { }
+
+    /** GET todos from the server */
+getTodos (): Observable<Todo[]> {
+  return this.http.get<Todo[]>(this.todosUrl);
+}
+
+    /** Log a TodoService message with the MessageService */
+private log(message: string) {
+  this.messageService.add(`TodoService: ${message}`);
+}
+}
+
+10.
+
+
+
+11.
+Error handling - Operatoren importieren, getTodos() modifizieren
+todo.service.ts
+import { catchError, map, tap } from 'rxjs/operators';
+...
+
+/**
+ * Handle Http operation that failed.
+ * Let the app continue.
+ * @param operation - name of the operation that failed
+ * @param result - optional value to return as the observable result
+ */
+private handleError<T> (operation = 'operation', result?: T) {
+  return (error: any): Observable<T> => {
+
+    // TODO: send the error to remote logging infrastructure
+    console.error(error); // log to console instead
+
+    // TODO: better job of transforming error for user consumption
+    this.log(`${operation} failed: ${error.message}`);
+
+    // Let the app keep running by returning an empty result.
+    return of(result as T);
+  };
+}
+ /* of(...items)—Returns an Observable instance that synchronously delivers the values provided as arguments. */
+/**
+ * Because each service method returns a different 
+ * kind of Observable result, handleError() takes a type parameter 
+ * so it can return the safe value as the type that the app expects.
+ */
+
+
+...
+getTodos (): Observable<Todo[]> {
+  return this.http.get<Todo[]>(this.todosUrl)
+    .pipe(
+      catchError(this.handleError('getTodos', []))
+    );
+}
+/*The catchError() operator intercepts an Observable that failed. It passes the error an error handler that can do what it wants with the error.*/
+
+
+
+
+
+12.
+Tap into the Observable
+The TodoService methods will tap into the flow of observable values and send a message (via log()) to the message area at the bottom of the page.
+They'll do that with the RxJS tap operator, which looks at the observable values, does something with those values, and passes them along. The tap call back doesn't touch the values themselves.
+
+/** GET todos from the server */
+getTodos (): Observable<Todo[]> {
+  return this.http.get<Todo[]>(this.todosUrl)
+  .pipe(
+    tap(_ => this.log('fetched todos')),
+    catchError(this.handleError('getTodos', []))
+  );
+}
+
+/** Log a TodoService message with the MessageService */
+private log(message: string) {
+  this.messageService.add(`TodoService: ${message}`);
+}
+
+commited state2
+
+
+13.
+Todos anzeigen
+C:\Users\vn3\todo-app5\src\app>ng generate component todos
+
+13.a.
+todos.component.ts
+import { Component, OnInit } from '@angular/core';
+import { TodoService } from '../todo.service';
+import { Todo } from '../todo';
+
+@Component({
+  selector: 'app-todos',
+  templateUrl: './todos.component.html',
+  styleUrls: ['./todos.component.css']
+})
+export class TodosComponent implements OnInit {
+
+  todos: Todo[];
+
+  constructor(private todoService: TodoService) { }
+
+  ngOnInit() {
+    this.getTodos();
+  }
+
+  getTodos(): void {
+    this.todoService.getTodos()
+    .subscribe(todos => this.todos = todos);
+  }
+
+}
+
+
+13.b
+todos.component.html
+<h2>My Todos</h2>
+<ul>
+  <li *ngFor="let todo of todos">
+      <span>{{todo.id}}</span> - {{todo.title}}    
+  </li>
+</ul>
+
+
+13.c
+app.component.html
+<app-todos></app-todos>
+
+
+14.
+messages anzeigen
+
+14.a
+ng generate component messages
+
+14.b.
+messages.component.ts
+constructor(public messageService: MessageService) { }
+
+14.c.
+messages.component.html
+<div *ngIf="messageService.messages.length">
+  <h2>Messages</h2>
+  <button class="clear"
+          (click)="messageService.clear()">clear</button>
+  <div *ngFor='let message of messageService.messages'> {{message}} </div>
+</div>
+
+14.d.
+app.component.html
+...
+<app-messages></app-messages>
+
+
+
+15.
+Für Routing eine Startseite anlegen
+
+15.a.
+ng generate component startview
+
+15.b.
+startview.component.ts
+...
+  todos: Todo[] = [];
+  constructor(private todoService: TodoService) { }
+  ngOnInit() {
+    this.getTodos();
+  }
+  getTodos(): void {
+    this.todoService.getTodos()
+    .subscribe(todos => this.todos = todos.slice(1, 5));
+  }
+
+15.c.
+startview.component.html
+<h3>Dringende Aufgaben</h3>
+<div>
+  <a *ngFor="let todo of todos">
+    <div>
+      <h4>{{todo.title}}</h4>
+    </div>
+  </a>
+</div>
+
+15.d.
+startview.component.css
+a>div {
+    background-color: grey;
+    color: white;
+    font-size: 3em;
+text-align: center;
+}
+
+
+15.e.
+app.component.html
+<app-startview></app-startview>
+<app-todos></app-todos>
+<router-outlet></router-outlet>
+<app-messages></app-messages>
+
+
+
+
+16.
+RoutingModule einbinden
+
+16.a.
+app-routing.module.ts
+const routes: Routes = [
+  { path: 'todos', component: TodosComponent }
+];
+
+16.b
+löschen app-todos
+löschen app-startview
+app.component.html
+...
+<router-outlet></router-outlet>
+<app-messages></app-messages>
+
+16.c
+http://localhost:4200/todos prüfen
+
+
+16.e.
+app-routing.module.ts
+...
+{ path: 'startview', component: StartviewComponent },
+{ path: '', redirectTo: '/startview', pathMatch: 'full' },
+
+***!!!Reihenfolge egal
+
+16.d.
+app.component.html
+<nav>
+  <a routerLink="/startview">Start</a>
+  <a routerLink="/todos">Todos</a>
+</nav>
+
+
+17.
+Get todo (not todos!)
+
+17.a.
+ng generate component todo-details
+
+17.b.
+todo.service.ts
+/** Get todo by Id */
+getTodo(id: number): Observable<Todo> {
+  const url = `${this.todosUrl}/${id}`;
+  return this.http.get<Todo>(url).pipe(
+    tap(_ => this.log(`fetched todo id=${id}`)),
+    catchError(this.handleError<Todo>(`getTodo id=${id}`))
+  );
+}
+
+17.c.
+todo-details.component.ts
+...
+@Input() todo: Todo;
+
+  constructor(
+    private todoService: TodoService,
+    private route: ActivatedRoute) { }
+
+  ngOnInit(): void {
+    this.getTodo();
+  }
+  /* warum const? */
+  /* was ist snapshot? */
+  /* was ist paramMap? Schau mal in die Folien*/
+  /* was macht subscribe()? */
+/*Frage von Marcel kurs Duss 28.02. Wozu brauchen wir die Methode getTodo wenn wir schon das ganze Objekt haben?*/
+
+/*+ Versucht, den Operanden in eine Zahl umzuwandeln, wenn dies nicht bereits der Fall ist.*/
+/*quasi parseInt()*/
+  getTodo(): void {
+    const id = +this.route.snapshot.paramMap.get('id');
+    this.todoService.getTodo(id)
+    .subscribe(todo => this.todo = todo);
+  }
+
+
+17.d.
+***!!!FormsModule erst importieren!
+
+todo-detail.component.html
+<div *ngIf="todo">
+  <h2>{{todo.title | uppercase}} Details</h2>
+  <div><span>id: </span>{{todo.id}}</div>
+  <div>
+    <label>Beschreibung:
+      <!-- textfeld wird automatisch ausgefüllt mit dem ausgewählten hero -->
+      <input [(ngModel)]="todo.title" placeholder="title" />
+
+    </label>
+  </div>
+</div>
+***!!!Banane in der Box
+
+
+17.e.
+app-routing.module.ts
+...
+,{ path: 'details/:id', component: TodoDetailsComponent }
+
+
+17.f.
+todos.component.html
+...
+    <a routerLink="/details/{{todo.id}}">
+      <span>{{todo.id}}</span> {{todo.title}}
+    </a>
+...
+
+17.g.
+startview.component.html
+...
+<a *ngFor="let todo of todos"
+  routerLink="/details/{{todo.id}}">
+
+
+
+COMMIT
+
+
+
+18.
+location
+
+18.a.
+todo-details.component.ts
+...
+import { Location } from '@angular/common';
+...
+constructor(
+    ...,
+    private location: Location) { }
+...
+goBack(): void {
+    this.location.back();
+}
+
+***!!!Nicht das DOM-Objekt Location, sondern manuell importieren!
+
+
+18.b.
+todo-details.component.html
+...
+<button (click)="goBack()">go back</button>
+
+
+19.
+UPDATE TODO
+
+19.a.
+todo.service.ts
+...
+/**Direkt nach den Imports, nicht in die Klasse!! */
+const httpOptions = {
+    headers: new HttpHeaders({ 'Content-Type': 'application/json'})
+  };
+...
+/** PUT: update the todo on the server */
+updateTodo (todo: Todo): Observable<any> {
+  return this.http.put(this.todosUrl, todo, httpOptions).pipe(
+    tap(_ => this.log(`updated todo id=${todo.id}`)),
+    catchError(this.handleError<any>('updateTodo'))
+  );
+}
+
+
+19.b.
+todo-detail.component.ts
+...
+  save(): void {
+    this.todoService.updateTodo(this.todo)
+    .subscribe(() => this.goBack());
+  }
+
+
+19.c.
+todo-detail.component.html
+...
+ <button (click)="save()">save</button>
+...
+
+
+20.
+ADD A NEW TODO
+
+20.a.
+todo.service.ts
+...
+/** POST: add a new hero to the server */
+addTodo (todo: Todo): Observable<Todo> {
+  return this.http.post<Todo>(this.todosUrl, todo, httpOptions).pipe(
+    tap((newTodo: Todo) => this.log(`added todo w/ id=${newTodo.id}`)),
+    catchError(this.handleError<Todo>('addTodo'))
+  );
+}
+***!!!welche Richtung läuft jetzt stream an der Stelle von tap?
+
+/* In der Klasse darf man die Konstante nicht anlegen.
+Es kommt die Meldung: Class member cannot have the const keyword.
+Welchen Scope hat jetzt diese Konstante, die außerhalb von Klasse deklariert ist? */
+const httpOptions = {
+  headers: new HttpHeaders({ 'Content-Type': 'application/json'})
+};
+
+
+20.b.
+todos.component.ts
+  add(title: string): void {
+    title = title.trim();
+    if (!title) { return; }
+    this.todoService.addTodo({ title } as Todo)
+      .subscribe(todo => {
+        this.todos.push(todo);
+      });
+  }
+
+
+20.c.
+todos.component.html
+...
+/**after the heading */
+<div>
+  <label>Todo description:
+    <input #todoDescr />
+  </label>
+  <!-- (click) passes input value to add() and then clears the input -->
+  <button (click)="add(todoDescr.value); todoDescr.value=''">
+    add
+  </button>
+</div>
+
+
+
+
+
+
+21.
+delete
+
+21.a.
+todos.component.html
+<button class="delete" title="delete hero"
+  (click)="delete(hero)">x</button>
+
+
+
+22.b.
+todos.component.ts
+delete(todo: Todo): void {
+  this.todos = this.todos.filter(t => t !== todo);
+  this.todoService.deleteTodo(todo).subscribe();
+}
+
+
+22.c
+todo.service.ts
+/** DELETE: delete the todo from the server */
+deleteTodo (hero: Todo | number): Observable<Todo> {
+  const id = typeof todo === 'number' ? todo : todo.id;
+  const url = `${this.heroesUrl}/${id}`;
+
+  return this.http.delete<Todo>(url, httpOptions).pipe(
+    tap(_ => this.log(`deleted todo id=${id}`)),
+    catchError(this.handleError<Todo>('deleteTodo'))
+  );
+}
+/**
+* Note that:
+ * it calls HttpClient.delete.
+* the URL is the todos resource URL plus the id of the hero to delete
+* you don't send data as you did with put and post.
+* you still send the httpOptions.
+*/
+
+
+
+22.
+search
+
+22.a.
+todo.service.ts
+/* GET todos whose name contains search term */
+searchTodos(term: string): Observable<Todo[]> {
+  if (!term.trim()) {
+    // if not search term, return empty todo array.
+    return of([]);
+  }
+  return this.http.get<Todo[]>(`${this.todosUrl}/?name=${term}`).pipe(
+    tap(_ => this.log(`found todos matching "${term}"`)),
+    catchError(this.handleError<Todo[]>('searchTodos', []))
+  );
+}
+
+
+22.b.
+ng generate component todo-search
+
+22.c.
+startview.component.html
+<h3>dringende aufgaben</h3>
+<div class="grid grid-pad">
+  <a *ngFor="let todo of todos" class="col-1-4"
+      routerLink="/detail/{{todo.id}}">
+    <div class="module todo">
+      <h4>{{todo.title}}</h4>
+    </div>
+  </a>
+</div>
+
+<app-todo-search></app-todo-search>
+
+
+
+22.d.
+todo-search.component.html
+<div id="search-component">
+  <h4>todo Search</h4>
+
+  <input #searchBox id="search-box" (input)="search(searchBox.value)" />
+
+/**The $ is a convention that indicates todos$ is an Observable, not an array.
+* The *ngFor can't do anything with an Observable. But there's also a pipe character (|) followed by async, which identifies Angular's AsyncPipe.
+* The AsyncPipe subscribes to an Observable automatically so you won't have to do so in the component class.*/
+
+  <ul class="search-result">
+    <li *ngFor="let todo of todos$ | async" >
+      <a routerLink="/details/{{todo.id}}">
+        {{todo.title}}
+      </a>
+    </li>
+  </ul>
+</div>
+***???Was genau macht async
+
+
+22.e.
+todo-search.component.ts
+import { Component, OnInit } from '@angular/core';
+
+import { Observable, Subject } from 'rxjs';
+
+import {
+   debounceTime, distinctUntilChanged, switchMap
+ } from 'rxjs/operators';
+
+import { Todo } from '../todo';
+import { TodoService } from '../todo.service';
+
+@Component({
+  selector: 'app-todo-search',
+  templateUrl: './todo-search.component.html',
+  styleUrls: [ './todo-search.component.css' ]
+})
+export class TodoSearchComponent implements OnInit {
+  heroes$: Observable<Todo[]>;
+  private searchTerms = new Subject<string>();
+
+  constructor(private heroService: TodoService) {}
+
+  // Push a search term into the observable stream.
+  search(term: string): void {
+    this.searchTerms.next(term);
+  }
+
+  ngOnInit(): void {
+    this.todos$ = this.searchTerms.pipe(
+      // wait 300ms after each keystroke before considering the term
+      debounceTime(300),
+
+      // ignore new term if same as previous term
+      distinctUntilChanged(),
+
+      // switch to new search observable each time the term changes
+      switchMap((term: string) => this.todoService.searchTodos(term)),
+    );
+  }
+}
+
+
+
+commit state 5
+
+
+23.
+24.
+Material
+
+24.a.
+PS C:\Users\vn3> npm install --save @angular/material @angular/cdk @angular/animations
+
+24.b.
+
+
+24.c.
+
+
+
+
+
+
